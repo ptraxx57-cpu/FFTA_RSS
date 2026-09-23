@@ -377,7 +377,7 @@ for competition in competitions:
 # ÉCRITURE DU FICHIER RSS
 # ============================================================
 
-output_file = "FFTA_Resultats.xml"
+output_file = "FFTA_Resultats_Competitions.xml"
 
 tree = ElementTree(rss)
 
