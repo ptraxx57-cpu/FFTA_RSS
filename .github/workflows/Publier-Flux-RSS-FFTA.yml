@@ -31,7 +31,7 @@ jobs:
           mkdir -p public
 
           cp FFTA_Competition_a_Venir.xml public/
-          cp FFTA_Resultats.xml public/
+          cp FFTA_Resultats_Competitions.xml public/
 
           echo "Fichiers publiés :"
           ls -la public
