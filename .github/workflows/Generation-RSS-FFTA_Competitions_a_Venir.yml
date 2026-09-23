@@ -1,0 +1,47 @@
+name: Générer le Flux RSS FFTA des Competitions à venir
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  generate-competitions:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer les dépendances
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4
+
+      - name: Générer le RSS
+        env:
+          BROWSERLESS_TOKEN: ${{ secrets.BROWSERLESS_TOKEN }}
+        run: |
+          python Generation-RSS-FFTA_Competitions_a_Venir.py
+
+      - name: Enregistrer le RSS
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add FFTA_Competition_a_Venir.xml
+
+          if git diff --cached --quiet; then
+            echo "Aucune modification."
+          else
+            git commit -m "Mise à jour des compétitions à venir"
+            git push
+          fi
