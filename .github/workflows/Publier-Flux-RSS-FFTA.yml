@@ -38,8 +38,8 @@ jobs:
 
       - name: Vérifier le RSS des compétitions
         run: |
-          test -f FFTA_Competition_a_Venir.xml
-          echo "✅ FFTA_Competition_a_Venir.xml créé"
+          test -f FFTA_Competitions_a_Venir.xml
+          echo "✅ FFTA_Competitions_a_Venir.xml créé"
 
       - name: Générer les résultats
         env:
@@ -57,7 +57,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add FFTA_Competition_a_Venir.xml FFTA_Resultats_Competitions.xml
+          git add FFTA_Competitions_a_Venir.xml FFTA_Resultats_Competitions.xml
 
           if git diff --cached --quiet; then
             echo "Aucune modification des fichiers RSS."
@@ -70,7 +70,7 @@ jobs:
         run: |
           mkdir -p public
 
-          cp FFTA_Competition_a_Venir.xml public/
+          cp FFTA_Competitions_a_Venir.xml public/
           cp FFTA_Resultats_Competitions.xml public/
 
           echo "Fichiers à publier :"
