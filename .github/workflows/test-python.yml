@@ -1,8 +1,13 @@
+name: Générer RSS FFTA - Compétitions
+
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  test:
+  generate:
     runs-on: ubuntu-latest
 
     steps:
@@ -14,7 +19,34 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Vérifier Python
+      - name: Installer les dépendances
         run: |
-          python --version
-          python -c "print('Python fonctionne correctement sur GitHub Actions !')"
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4
+
+      - name: Générer le RSS
+        env:
+          BROWSERLESS_TOKEN: ${{ secrets.BROWSERLESS_TOKEN }}
+        run: |
+          python Generation-RSS-FFTA_Competitions_a_Venir.py
+
+      - name: Vérifier le fichier généré
+        run: |
+          ls -la
+          echo "--------------------------------"
+          echo "Fichier RSS :"
+          cat FFTA_Competition_a_Venir.xml
+
+      - name: Enregistrer le RSS dans GitHub
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add FFTA_Competition_a_Venir.xml
+
+          if git diff --cached --quiet; then
+            echo "Aucune modification du RSS."
+          else
+            git commit -m "Mise à jour des compétitions à venir"
+            git push
+          fi
