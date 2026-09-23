@@ -2,29 +2,90 @@ name: Publier les flux RSS
 
 on:
   workflow_dispatch:
+
   workflow_run:
     workflows:
       - "FFTA - Compétitions à venir"
-      - "FFTA - Résultats des compétitions"
+      - "FFTA - Résultats"
     types:
       - completed
 
 permissions:
+  actions: read
   contents: read
   pages: write
   id-token: write
 
 jobs:
+  check-generations:
+    name: Vérifier les deux générations
+    runs-on: ubuntu-latest
+
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+
+    steps:
+      - name: Vérifier que les deux workflows sont terminés avec succès
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TODAY=$(date -u +%Y-%m-%d)
+
+          echo "Date UTC : $TODAY"
+          echo ""
+
+          echo "Recherche du dernier succès du workflow Compétitions..."
+          COMPETITIONS=$(gh run list \
+            --workflow "Generation-RSS-FFTA_Competitions_a_Venir.yml" \
+            --branch main \
+            --limit 20 \
+            --json conclusion,createdAt \
+            --jq "[.[] | select(.conclusion == \"success\" and (.createdAt | startswith(\"$TODAY\")))] | length")
+
+          echo "Succès Compétitions aujourd'hui : $COMPETITIONS"
+
+          echo ""
+          echo "Recherche du dernier succès du workflow Résultats..."
+          RESULTATS=$(gh run list \
+            --workflow "Generation-RSS-FFTA_Resultats-Competitions.yml" \
+            --branch main \
+            --limit 20 \
+            --json conclusion,createdAt \
+            --jq "[.[] | select(.conclusion == \"success\" and (.createdAt | startswith(\"$TODAY\")))] | length")
+
+          echo "Succès Résultats aujourd'hui : $RESULTATS"
+
+          echo ""
+
+          if [ "$COMPETITIONS" -ge 1 ] && [ "$RESULTATS" -ge 1 ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Les deux générations sont terminées avec succès."
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "⏳ Les deux générations ne sont pas encore terminées avec succès."
+          fi
+
   deploy:
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+    name: Publier sur GitHub Pages
+    needs: check-generations
+    if: needs.check-generations.outputs.ready == 'true'
 
     runs-on: ubuntu-latest
 
     steps:
       - name: Récupérer le dépôt
         uses: actions/checkout@v4
+
+      - name: Vérifier les fichiers XML
+        run: |
+          echo "Vérification des fichiers RSS..."
+
+          test -f FFTA_Competition_a_Venir.xml
+          test -f FFTA_Resultats_Competitions.xml
+
+          echo "✅ FFTA_Competition_a_Venir.xml présent"
+          echo "✅ FFTA_Resultats_Competitions.xml présent"
 
       - name: Préparer les fichiers
         run: |
@@ -33,8 +94,9 @@ jobs:
           cp FFTA_Competition_a_Venir.xml public/
           cp FFTA_Resultats_Competitions.xml public/
 
-          echo "Fichiers publiés :"
-          ls -la public
+          echo ""
+          echo "Contenu de public :"
+          ls -lh public
 
       - name: Configurer GitHub Pages
         uses: actions/configure-pages@v5
