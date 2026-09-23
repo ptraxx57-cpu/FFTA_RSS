@@ -1,0 +1,48 @@
+name: Publier les flux RSS
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - "FFTA - Compétitions à venir"
+      - "FFTA - Résultats des compétitions"
+    types:
+      - completed
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Préparer les fichiers
+        run: |
+          mkdir -p public
+
+          cp FFTA_Competition_a_Venir.xml public/
+          cp FFTA_Resultats.xml public/
+
+          echo "Fichiers publiés :"
+          ls -la public
+
+      - name: Configurer GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Créer l'artefact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Publier sur GitHub Pages
+        uses: actions/deploy-pages@v4
