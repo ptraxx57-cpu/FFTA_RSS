@@ -1,107 +1,85 @@
-name: Publier les flux RSS
+name: Générer et publier les flux RSS
 
 on:
   workflow_dispatch:
 
-  workflow_run:
-    workflows:
-      - "FFTA - Compétitions à venir"
-      - "FFTA - Résultats"
-    types:
-      - completed
+  schedule:
+    - cron: "0 5 * * *"
 
 permissions:
-  actions: read
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
 jobs:
-  check-generations:
-    name: Vérifier les deux générations
-    runs-on: ubuntu-latest
-
-    outputs:
-      ready: ${{ steps.check.outputs.ready }}
-
-    steps:
-      - name: Vérifier que les deux workflows sont terminés avec succès
-        id: check
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TODAY=$(date -u +%Y-%m-%d)
-
-          echo "Date UTC : $TODAY"
-          echo ""
-
-          echo "Recherche du dernier succès du workflow Compétitions..."
-          COMPETITIONS=$(gh run list \
-            --workflow "Generation-RSS-FFTA_Competitions_a_Venir.yml" \
-            --branch main \
-            --limit 20 \
-            --json conclusion,createdAt \
-            --jq "[.[] | select(.conclusion == \"success\" and (.createdAt | startswith(\"$TODAY\")))] | length")
-
-          echo "Succès Compétitions aujourd'hui : $COMPETITIONS"
-
-          echo ""
-          echo "Recherche du dernier succès du workflow Résultats..."
-          RESULTATS=$(gh run list \
-            --workflow "Generation-RSS-FFTA_Resultats-Competitions.yml" \
-            --branch main \
-            --limit 20 \
-            --json conclusion,createdAt \
-            --jq "[.[] | select(.conclusion == \"success\" and (.createdAt | startswith(\"$TODAY\")))] | length")
-
-          echo "Succès Résultats aujourd'hui : $RESULTATS"
-
-          echo ""
-
-          if [ "$COMPETITIONS" -ge 1 ] && [ "$RESULTATS" -ge 1 ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-            echo "✅ Les deux générations sont terminées avec succès."
-          else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "⏳ Les deux générations ne sont pas encore terminées avec succès."
-          fi
-
-  deploy:
-    name: Publier sur GitHub Pages
-    needs: check-generations
-    if: needs.check-generations.outputs.ready == 'true'
-
+  generate-and-publish:
+    name: Générer les 2 RSS et publier
     runs-on: ubuntu-latest
 
     steps:
       - name: Récupérer le dépôt
         uses: actions/checkout@v4
 
-      - name: Vérifier les fichiers XML
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer les dépendances
         run: |
-          echo "Vérification des fichiers RSS..."
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4
 
+      - name: Générer les compétitions à venir
+        env:
+          BROWSERLESS_TOKEN: ${{ secrets.BROWSERLESS_TOKEN }}
+        run: |
+          python Generation-RSS-FFTA_Competitions_a_Venir.py
+
+      - name: Vérifier le RSS des compétitions
+        run: |
           test -f FFTA_Competition_a_Venir.xml
+          echo "✅ FFTA_Competition_a_Venir.xml créé"
+
+      - name: Générer les résultats
+        env:
+          BROWSERLESS_TOKEN: ${{ secrets.BROWSERLESS_TOKEN }}
+        run: |
+          python Generation-RSS-FFTA_Resultats-Competitions.py
+
+      - name: Vérifier le RSS des résultats
+        run: |
           test -f FFTA_Resultats_Competitions.xml
+          echo "✅ FFTA_Resultats_Competitions.xml créé"
 
-          echo "✅ FFTA_Competition_a_Venir.xml présent"
-          echo "✅ FFTA_Resultats_Competitions.xml présent"
+      - name: Enregistrer les deux RSS dans Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Préparer les fichiers
+          git add FFTA_Competition_a_Venir.xml FFTA_Resultats_Competitions.xml
+
+          if git diff --cached --quiet; then
+            echo "Aucune modification des fichiers RSS."
+          else
+            git commit -m "Mise à jour des flux RSS"
+            git push
+          fi
+
+      - name: Préparer les fichiers pour GitHub Pages
         run: |
           mkdir -p public
 
           cp FFTA_Competition_a_Venir.xml public/
           cp FFTA_Resultats_Competitions.xml public/
 
-          echo ""
-          echo "Contenu de public :"
+          echo "Fichiers à publier :"
           ls -lh public
 
       - name: Configurer GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Créer l'artefact
+      - name: Créer l'artefact GitHub Pages
         uses: actions/upload-pages-artifact@v3
         with:
           path: public
